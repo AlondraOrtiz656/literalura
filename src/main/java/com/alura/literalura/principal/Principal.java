@@ -1,10 +1,10 @@
 package com.alura.literalura.principal;
-import com.alura.literalura.model.DatosAutor;
+
 import com.alura.literalura.model.DatosLibro;
 import com.alura.literalura.service.ConsumoAPI;
 import com.alura.literalura.service.ConvierteDatos;
 import com.alura.literalura.model.DatosRespuesta;
-import java.util.ArrayList;
+
 import java.util.List;
 import java.util.Scanner;
 import java.net.URLEncoder;
@@ -80,8 +80,8 @@ public class Principal {
 
         try {
             String json = consumoAPI.obtenerDatos(url);
-            System.out.println("JSON recibido:");
-            System.out.println(json);
+            //System.out.println("JSON recibido:");
+            //System.out.println(json);
 
             DatosRespuesta datos = conversor.obtenerDatos(json, DatosRespuesta.class);
 

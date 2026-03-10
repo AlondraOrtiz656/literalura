@@ -18,6 +18,8 @@ public class CatalogService {
     private final AutorRepository autorRepository;
     private final LibroRepository libroRepository;
 
+
+
     public CatalogService(AutorRepository autorRepository, LibroRepository libroRepository) {
         this.autorRepository = autorRepository;
         this.libroRepository = libroRepository;
@@ -57,16 +59,25 @@ public class CatalogService {
         }
         if (changed) autorRepository.save(autor);
 
-        // Crear y guardar libro (evitar duplicados simples por título+autor)
+        // Verificar si el libro ya existe en la base de datos
+        Optional<Libro> libroExistente = libroRepository.findByTituloIgnoreCase(titulo);
+
+        if (libroExistente.isPresent()) {
+            throw new RuntimeException("Libro ya insertado en la BD.");
+        }
+
+        // Crear y guardar libro
         Libro libro = new Libro(titulo, idioma, descargas);
         libro.setAutor(autor);
         Libro saved = libroRepository.save(libro);
 
-        // Añadir libro a autor (mantener relación en memoria)
+        // Mantener relación en memoria
         autor.getLibros().add(saved);
 
         return saved;
     }
+
+
 
     public List<Libro> listarLibros() {
         // Usamos la query con JOIN FETCH para que el autor venga inicializado
