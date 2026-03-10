@@ -4,18 +4,22 @@ import com.alura.literalura.principal.Principal;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
+import com.alura.literalura.service.CatalogService;
+import org.springframework.context.annotation.Bean;
 
 @SpringBootApplication
-public class LiteraluraApplication implements CommandLineRunner {
+public class LiteraluraApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(LiteraluraApplication.class, args);
     }
 
-    @Override
-    public void run(String... args) {
-        Principal principal = new Principal();
-        principal.mostrarMenu();
+    // Creamos un CommandLineRunner para que Spring inyecte CatalogService
+    @Bean
+    CommandLineRunner init(CatalogService catalogService) {
+        return args -> {
+            Principal principal = new Principal(catalogService);
+            principal.mostrarMenu();
+        };
     }
 }

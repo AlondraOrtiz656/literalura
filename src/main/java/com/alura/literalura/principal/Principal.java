@@ -9,27 +9,20 @@ import java.util.List;
 import java.util.Scanner;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-
 import java.util.*;
-import java.util.stream.Collectors;
+import com.alura.literalura.service.CatalogService;
+import com.alura.literalura.entity.Libro;
 
 public class Principal {
 
     private final ConsumoAPI consumoAPI = new ConsumoAPI();
     private final ConvierteDatos conversor = new ConvierteDatos();
+    private final CatalogService catalogService;
 
-    // Almacenamiento en memoria (temporal). Más adelante lo cambias por JPA.
-    private final List<DatosLibro> librosGuardados = new ArrayList<>();
-
-    // método ya existente para pruebas (puedes mantenerlo o eliminarlo)
-    public void muestraDatos() {
-        String url = "https://gutendex.com/books/?search=tolkien";
-        String json = consumoAPI.obtenerDatos(url);
-        DatosRespuesta datos = conversor.obtenerDatos(json, DatosRespuesta.class);
-        System.out.println(datos.getResultados());
+    public Principal(CatalogService catalogService) {
+        this.catalogService = catalogService;
     }
 
-    // Método que muestra el menú y gestiona la interacción
     public void mostrarMenu() {
         try (Scanner teclado = new Scanner(System.in)) {
 
@@ -61,8 +54,8 @@ public class Principal {
                 }
 
                 switch (opcion) {
-                    case 1 -> buscarLibroPorTitulo(teclado);
-                    case 2 -> listarLibrosGuardados();
+                    case 1 -> buscarYGuardarLibro(teclado);
+                    case 2 -> listarLibrosRegistrados();
                     case 3 -> listarAutoresRegistrados();
                     case 4 -> listarAutoresVivosEnAno(teclado);
                     case 5 -> listarLibrosPorIdioma(teclado);
@@ -73,7 +66,7 @@ public class Principal {
         }
     }
 
-    private void buscarLibroPorTitulo(Scanner teclado) {
+    private void buscarYGuardarLibro(Scanner teclado) {
         System.out.print("Escribe el título (o parte del título) a buscar: ");
         String titulo = teclado.nextLine().trim();
 
@@ -87,26 +80,16 @@ public class Principal {
 
         try {
             String json = consumoAPI.obtenerDatos(url);
-
-            // DEBUG: puedes comentar la siguiente línea cuando esté todo ok
             System.out.println("JSON recibido:");
             System.out.println(json);
 
             DatosRespuesta datos = conversor.obtenerDatos(json, DatosRespuesta.class);
 
             if (datos.getResultados() != null && !datos.getResultados().isEmpty()) {
-                DatosLibro libro = datos.getResultados().get(0); // primer resultado
-                System.out.println(libro); // usa el toString formateado en DatosLibro
-
-                // Guardarlo en la lista temporal si no está ya guardado (evita duplicados simples)
-                boolean ya = librosGuardados.stream()
-                        .anyMatch(l -> l.getTitulo().equalsIgnoreCase(libro.getTitulo()));
-                if (!ya) {
-                    librosGuardados.add(libro);
-                    System.out.println("Libro guardado en catálogo local.");
-                } else {
-                    System.out.println("El libro ya existe en el catálogo local.");
-                }
+                DatosLibro datoLibro = datos.getResultados().get(0); // primer resultado
+                Libro saved = catalogService.guardarDesdeDatosLibro(datoLibro);
+                System.out.println("Libro guardado en BD:");
+                System.out.println(saved); // usa toString() de entidad Libro
             } else {
                 System.out.println("No se encontraron resultados para: " + titulo);
             }
@@ -116,84 +99,40 @@ public class Principal {
         }
     }
 
-    private void listarLibrosGuardados() {
+    private void listarLibrosRegistrados() {
         System.out.println();
         System.out.println("========== Libros registrados ==========");
-        if (librosGuardados.isEmpty()) {
+        List<Libro> libros = catalogService.listarLibros();
+        if (libros.isEmpty()) {
             System.out.println("No hay libros registrados todavía.");
             return;
         }
-
-        for (DatosLibro libro : librosGuardados) {
-            System.out.println(libro); // usa el toString formateado
-        }
+        libros.forEach(System.out::println);
     }
 
     private void listarAutoresRegistrados() {
         System.out.println();
         System.out.println("========== Autores registrados ==========");
-        Set<String> autores = new LinkedHashSet<>();
-
-        for (DatosLibro libro : librosGuardados) {
-            if (libro.getAutores() != null) {
-                for (DatosAutor a : libro.getAutores()) {
-                    if (a != null && a.getNombre() != null) {
-                        autores.add(a.getNombre());
-                    }
-                }
-            }
-        }
-
-        if (autores.isEmpty()) {
-            System.out.println("No hay autores registrados todavía.");
-            return;
-        }
-
-        autores.forEach(System.out::println);
+        catalogService.listarAutores().forEach(a -> System.out.println(a.toString()));
     }
 
     private void listarAutoresVivosEnAno(Scanner teclado) {
         System.out.print("Introduce el año (ej: 1890): ");
         String linea = teclado.nextLine().trim();
-        int año;
+        int year;
         try {
-            año = Integer.parseInt(linea);
+            year = Integer.parseInt(linea);
         } catch (NumberFormatException e) {
             System.out.println("Año inválido.");
             return;
         }
 
-        // Coleccionar autores únicos con birth/death si están disponibles
-        Map<String, DatosAutor> mapa = new LinkedHashMap<>();
-        for (DatosLibro libro : librosGuardados) {
-            if (libro.getAutores() != null) {
-                for (DatosAutor a : libro.getAutores()) {
-                    if (a != null && a.getNombre() != null) {
-                        mapa.putIfAbsent(a.getNombre(), a);
-                    }
-                }
-            }
-        }
-
-        List<DatosAutor> vivos = mapa.values().stream()
-                .filter(a -> {
-                    Integer birth = a.getBirthYear();
-                    Integer death = a.getDeathYear();
-                    // consideramos vivo si birth <= año y (death == null || death >= año)
-                    if (birth != null && birth <= año) {
-                        return death == null || death >= año;
-                    }
-                    return false;
-                })
-                .collect(Collectors.toList());
-
+        var vivos = catalogService.listarAutoresVivosEnAno(year);
         if (vivos.isEmpty()) {
-            System.out.println("No se encontraron autores vivos en el año: " + año);
+            System.out.println("No se encontraron autores vivos en el año: " + year);
             return;
         }
-
-        System.out.println("Autores vivos en " + año + ":");
-        vivos.forEach(a -> System.out.println(a.getNombre() + (a.getBirthYear() != null ? " (nac: " + a.getBirthYear() + ")" : "")));
+        vivos.forEach(a -> System.out.println(a.toString()));
     }
 
     private void listarLibrosPorIdioma(Scanner teclado) {
@@ -205,19 +144,13 @@ public class Principal {
             return;
         }
 
-        List<DatosLibro> filtrados = new ArrayList<>();
-        for (DatosLibro libro : librosGuardados) {
-            if (libro.getIdioma() != null && libro.getIdioma().toLowerCase().startsWith(idioma)) {
-                filtrados.add(libro);
-            }
-        }
-
+        var filtrados = catalogService.listarLibrosPorIdioma(idioma);
         if (filtrados.isEmpty()) {
             System.out.println("No se encontraron libros en el idioma: " + idioma);
             return;
         }
 
         System.out.println("=== Libros en '" + idioma + "' ===");
-        filtrados.forEach(System.out::println); // usa toString formateado
+        filtrados.forEach(System.out::println);
     }
 }
